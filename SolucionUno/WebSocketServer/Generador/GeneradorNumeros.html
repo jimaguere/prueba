@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>Generador de Numeros</title>
+    <script src="../Scripts/jquery-1.6.4.min.js"></script>
+    <script src="../Scripts/jquery.signalR-2.1.1.min.js"></script>
+    <script src="/signalr/hubs" type="text/javascript"></script>
+    <script>
+
+        var numeroInicial = 0; //Limite minimo de generacion del numero aleatorio
+        var numeroFinal = 20; //Limite maximo de generacion del numero aleatorio
+        var numerosEnviados; //Cantidad de numeros enviados al Web Socket Server
+        var connection; //Conexion al Web Socket Server usando SignalR
+        var iniciaGeneracion; //Bandera para determinar si inicia o se detiene la generacion de numeros aleatorios
+        var milisegundos; //Variable para determinar cada cuanto tiempo se generara un numero aleatorio
+        var cantidadNumeros; //Variable para determinar la cantidad de numeros aleatorios generados a mostrar en pantallas
+                
+        function obtenerNumeroAleatorio() {
+            var numeroAleatorio = Math.floor(Math.random() * (numeroInicial - numeroFinal + 1)) + numeroFinal;
+            return numeroAleatorio;
+        }
+
+        function iniciarGeneracion() {
+            if (iniciaGeneracion) {
+                if (numerosEnviados < cantidadNumeros) {
+                    numerosEnviados++;
+                } else {
+                    numerosEnviados = 1;
+                }
+                //Este metodo permite enviar el numero generado al Web Socket Server
+                connection.server.enviarNumero(obtenerNumeroAleatorio()).done(function () {
+                    //Cuando acaba de enviar el numero satisfactoriamente se llama nuevamente al metodo iniciar Generacion
+                    setTimeout(iniciarGeneracion, milisegundos);
+                });                
+            }
+        }
+
+        function detenerGeneracion() {
+            iniciaGeneracion = false; //La bandera para iniciar la generacion de numeros aleatorios inicia deshabilitada
+            $('#btnIniciar').attr("disabled", false); //Se habilita el boton iniciar
+            $('#btnDetener').attr("disabled", true); //Se deshabilita el boton detener
+
+            $('#numeros').html(' '); //Se limpia la lista de numeros en pantalla
+            numerosEnviados = 0; //La cantidad de numeros enviados al Web Socket Server inicia en 0
+        }
+
+        $(function () {
+            iniciaGeneracion = false; //La bandera para iniciar la generacion de numeros aleatorios inicia deshabilitada
+            $('#btnIniciar').attr("disabled", true); //Se deshabilita el boton iniciar
+            $('#btnDetener').attr("disabled", true); //Se deshabilita el boton detener
+            $('#btnConectar').attr('disabled', false); //Boton conectar habilitado
+            $('#btnDesconectar').attr('disabled', true); //Boton desconectar deshabilitado
+            milisegundos = 200; //Cada 200 milisegundos se llamara al metodo que genera el numero aleatorio
+            cantidadNumeros = 5; //5 numeros generados aleatoriamente en pantalla
+
+            //La cantidad de numeros enviados al Web Socket Server inicia en 0
+            numerosEnviados = 0;
+
+            //Se realiza la conexion con el Web Socket Server al socket que recibe los numeros generados
+            connection = $.connection.numerosHub;
+            
+            connection.client.enviarMensaje = function (numero) {
+                //El numero recibido por el socket se indica en pantalla
+                if (numerosEnviados < cantidadNumeros) {
+                    $('#numeros').append('<li>' + numero + '</li>');
+                } else {
+                    $('#numeros').html(' ');
+                    $('#numeros').append('<li>' + numero + '</li>');
+                }
+            }
+
+            $.connection.hub.error(function (error) {
+                $('#btnIniciar').attr("disabled", true); //Se deshabilita el boton iniciar
+                $('#btnDetener').attr("disabled", true); //Se deshabilita el boton detener
+                $('#btnConectar').attr('disabled', false); //Boton conectar habilitado
+                $('#btnDesconectar').attr('disabled', true); //Boton desconectar deshabilitado
+            
+                $('#numeros').html(' '); //Se limpia la lista de numeros en pantalla
+                numerosEnviados = 0; //La cantidad de numeros enviados al Web Socket Server inicia en 0
+                alert(error);
+            });
+        });
+
+        function preIniciarGeneracion() {            
+            iniciaGeneracion = true; //Se habilita la bandera para iniciar la generacion de numeros aleatorios
+            $('#btnIniciar').attr("disabled", true); //Se deshabilita el boton iniciar
+            $('#btnDetener').attr("disabled", false); //Se habilita el boton detener
+        }
+
+        function conectar() {
+            $('#btnConectar').attr('disabled', true); //Boton conectar deshabilitado            
+            $.connection.hub.start().done(function () {
+                //Se inicia la conexion
+                $('#btnDesconectar').attr('disabled', false); //Boton desconectar habilitado
+                $('#btnIniciar').attr('disabled', false); //Boton iniciar generador habilitado
+                $('#btnDetener').attr('disabled', true); //Boton detener generador deshabilitado
+            });
+        }
+
+        function desconectar() {
+            //Se detiene la conexion
+            $.connection.hub.stop();
+            $('#btnConectar').attr('disabled', false); //Boton conectar habilitado
+            $('#btnDesconectar').attr('disabled', true); //Boton desconectar deshabilitado
+            $('#btnIniciar').attr('disabled', true); //Boton iniciar generador deshabilitado
+            $('#btnDetener').attr('disabled', true); //Boton detener generador deshabilitado
+            $('#numeros').html(' '); //Se limpia la lista de numeros en pantalla
+            numerosEnviados = 0; //La cantidad de numeros enviados al Web Socket Server inicia en 0
+        }
+    </script>
+    <style type="text/css">
+        body {
+            padding: 20px 20px 20px 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Generador de números aleatorios</h1>
+    <table style=" width: 500px;">
+        <tr>
+            <td colspan="2" style=" text-align: justify;">
+                Los números serán generados aleatoriamente cada 200 milisegundos. El servidor se encargará cada segundo de realizar la suma y enviarla a la gráfica.
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" style=" text-align: justify;">
+                <br />
+            </td>
+        </tr>
+        <tr>
+            <td><input type="button" id="btnConectar" name="btnConectar" onclick="conectar()" value="Conectar"/></td>
+            <td><input type="button" id="btnDesconectar" name="btnDesconectar" onclick="desconectar()" value="Desconectar"/></td>
+        </tr>
+        <tr>
+            <td><input type="button" id="btnIniciar" name="btnIniciar" value="Iniciar generador" onclick="preIniciarGeneracion(); iniciarGeneracion();" /></td>
+            <td><input type="button" id="btnDetener" name="btnDetener" value="Detener generador" onclick="detenerGeneracion()" /></td>
+        </tr>
+        <tr style=" text-align: left;">
+            <td style=" vertical-align: top;"><br />Números:</td>
+            <td>
+                <ul id="numeros"></ul>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
